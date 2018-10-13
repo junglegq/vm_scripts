@@ -4,46 +4,26 @@
 # 
 # NOTE: current implementation will identify the hostname for the config policy. Be aware. 
 
+DRY_RUN=1
+
+HOST=`hostname`
 
 ROOTPATH=/oses
 SCRIPTSPATH=$ROOTPATH/vm_scripts
-NATTABLE=$SCRIPTSPATH/nat.cfg
-
-MAPFILE=$ROOTPATH/mapping.csv
 VMDIR=$ROOTPATH/vms
 TMPLDIR=$ROOTPATH/win7_tmpl
 
 RAMDIR=/dev/shm
-
 BTRFS=/sbin/btrfs
-
-# memory size used by VM
-MEMSIZE_VM=3500
 
 # Don't use NATIP0 for the GuoPai firewall issue. 08/15/2018
 NATIP0="222.73.69.144"
 NATIP1="222.73.69.145"
 
-HOST=`hostname`
-# This is the IP that new VM in each node starts with.
-IPPREFIX="10.101.20."
-case $HOST in
-	"box0" )
-		IPOFFSET=130
-		;;
-	"box1" )
-		IPOFFSET=160
-		;;
-	"node1" )
-		IPOFFSET=60
-		;;
-	"node2" )
-		IPOFFSET=90
-		;;
-	"box2" )
-		IPOFFSET=190
-		;;
-esac
+# memory size used by VM
+MEMSIZE_VM=3500
+
+DEFAULT_BR=br20
 
 #####################################################################
 
@@ -52,9 +32,10 @@ declare vmid
 
 Usage()
 {
-        echo "$0 [ -n <number> | -s <VM NAME> ]"
+        echo "$0 [ -b <bridge> ] [ -n <number> | -s <VM NAME> ]"
         echo ""
         echo "Options: "
+        echo "    -b <bridge> : VM will be created on bridge interface <bridge> instead of default \'br20\'."
     	echo "    -n <number> : Create <number> VMs. This action will first remove all VMs created before."
     	echo "    -s <VM NAME> : Destroy this <VM>, delete its image folder, and then re-create this VM."
 }
@@ -64,7 +45,7 @@ Usage()
 # Args: 
 #      mac, ip, bdf, hostname, cpupin
 
-GenConfig()
+GenConfig() 
 {
 	mac=$1
 	ip=$2
@@ -72,7 +53,8 @@ GenConfig()
 	hostname=$4
 	cpupin=$5
 		
-	CURCONF=$CURVM/$hostname.cfg
+	#CURCONF=$CURVM/$hostname.cfg
+	CURCONF=$CURVM/vm.cfg
 	mv $CURVM/*.cfg $CURCONF
 	echo "Modify config file: $CURCONF"
 
@@ -101,17 +83,8 @@ GenConfig()
 	# echo "disk = [ 'file:/$CURVM/base.img,xvda,w', 'file:/$RAMDIR/ram$hostname.img,xvdb,w' ]" >> $CURCONF
 	echo "disk = [ 'file:/$CURVM/base.img,xvda,w' ]" >> $CURCONF
 
-	# Need to setup correct NIC configure for dedicated machines.
-	# Current logic is based on hostname.
-	thisbox=`hostname`
-	if [[ $thisbox = "box0" || $thisbox = "box1" || $thisbox = "node3" ]]; then
-		echo "vif = [ 'type=ioemu, mac=$mac, bridge=br0' ]" >> $CURCONF
-	elif [[ $thisbox = "node1" || $thisbox = "node2" ]]; then
-		#echo "vif = [ 'type=ioemu, mac=$mac, bridge=br20' ]" >> $CURCONF
-		echo "vif = [ 'type=ioemu, mac=$mac, bridge=br0' ]" >> $CURCONF
-	elif [[ $thisbox = "box2" ]]; then
-		echo "vif = [ 'type=ioemu, mac=$mac, bridge=br20' ]" >> $CURCONF
-	fi
+	
+	echo "vif = [ 'type=ioemu, mac=$mac, bridge=$DEFAULT_BR' ]" >> $CURCONF
 }
 
 #########################################################
@@ -131,12 +104,22 @@ CreateSingleVM()
 
 	echo "Create btrfs snapshot for each vm, and name it as hostname. "
 	CURVM=$VMDIR/$hostname
-	$BTRFS subvolume snapshot $TMPLDIR $CURVM
-	
+	if [ $DRY_RUN -ne 1 ]; then
+		$BTRFS subvolume snapshot $TMPLDIR $CURVM
+	else
+	# Test only, need to remove this directory first before next test.
+		rm -rf $CURVM; mkdir $CURVM
+		cp $TMPLDIR/*.cfg $CURVM
+	fi
+		
 	GenConfig $mac $ip $bdf $hostname $cpupin
 
 	echo "Now, create VM: $hostname"
-	xl create $CURCONF
+	if [ $DRY_RUN -ne 1 ]; then
+		xl create $CURCONF
+	else
+		echo Todo: xl create $CURCONF
+	fi
 
 # This is new added feature, in order to assign/revoke access to internet via NAT table in router.
 # Any operation should be revoke when close VM. 
@@ -225,8 +208,12 @@ PrepareSingle()
 
 	#echo "Prepare for single VM: $vm"
 	echo "Destroy VM $vm ..."
-	xl destroy $vm 2>/dev/null
-	$BTRFS subvolume delete $VMDIR/$vm
+	if [ $DRY_RUN -ne 1 ]; then
+		xl destroy $vm 2>/dev/null
+		$BTRFS subvolume delete $VMDIR/$vm
+	else
+		rm -rf $VMDIR/$vm
+	fi
 }
 
 PrepareAll()
@@ -272,8 +259,10 @@ PrefixMAC () {
 			_prefixNode="02" 
 			;;
 		"box2" )
-			_prefixChas="65"
-			_prefixNode="14" 
+			# 0x65 -> 0d101
+			_prefixChas="65"	
+			# 0x14 -> 0d20
+			_prefixNode=`printf "%02x" ${DEFAULT_BR#br}`
 			;;
 	esac
 
@@ -285,19 +274,22 @@ PrefixMAC () {
 
 ## main function
 
-while getopts "n:s:" arg  
+while getopts "b:n:s:" arg  
 do
-        case $arg in
-             n)
-		n=$OPTARG 
-		echo "Open $n VMs ..." ;;
-             s)
-		vmid=$OPTARG 
-		echo "Create VM: $vmid ..." ;;
-             ?)
-                Usage 
-		exit 1 ;;
-         esac
+	case $arg in 
+		b)
+			DEFAULT_BR=$OPTARG
+			echo "Will create VMs on $DEFAULT_BR" ;;       	
+		n)
+			n=$OPTARG 
+			echo "Create $n VMs ..." ;;
+		s)
+			vmid=$OPTARG 
+			echo "Create VM: $vmid ..." ;;
+		?)
+		    Usage 
+			exit 1 ;;
+	esac
 done
 
 if [[ "x$n" = "x" ]] && [[ "x$vmid" = "x" ]]; then
@@ -305,9 +297,38 @@ if [[ "x$n" = "x" ]] && [[ "x$vmid" = "x" ]]; then
 	exit 2
 fi
 
-##################
-#exit 0
-##################
+MAPFILE=$ROOTPATH/mapping_BRXX.csv
+NATTABLE=$SCRIPTSPATH/nat_BRXX.cfg
+DHCPCFG="$SCRIPTSPATH/paipai_${HOST}_BRXX.conf"
+# Rename global variables here: 
+#   for example, New format as is: mapping_br20.csv
+MAPFILE=${MAPFILE/BRXX/${DEFAULT_BR}}
+NATTABLE=${NATTABLE/BRXX/${DEFAULT_BR}}
+DHCPCFG=${DHCPCFG/BRXX/${DEFAULT_BR}}
+
+# This is the IP that new VM in each node starts with.
+# 	e.g. default IPPREFIX = "10.101.20"
+IPPREFIX="10.101"
+IPPREFIX=$IPPREFIX.${DEFAULT_BR#br}
+
+case $HOST in
+	"box0" )
+		IPOFFSET=130
+		;;
+	"box1" )
+		IPOFFSET=160
+		;;
+	"node1" )
+		IPOFFSET=60
+		;;
+	"node2" )
+		IPOFFSET=90
+		;;
+	"box2" )
+		IPOFFSET=190
+		;;
+esac
+
 
 echo " ***   Hello, world   *** "
 echo " ***     Start from : `date` "
@@ -340,37 +361,43 @@ if [ "x$n" != "x" ]; then
 		_prefixmac=$(PrefixMAC)
 		_char=`printf "%02x" $((IPOFFSET+i))`
 		newmac=${_prefixmac}":"${_char}	
-		newip=${IPPREFIX}$((IPOFFSET+i))		
-		vmname=${HOST}VF$((IPOFFSET+i))		
+		newip=${IPPREFIX}.$((IPOFFSET+i))		
+		# e.g. box0VF160BR20
+		vmname=${HOST}VF$((IPOFFSET+i))${DEFAULT_BR}	
 		# PS: 0-2 now just means to assign 3 CPU threads
 		echo "$newmac,$newip,XENVIRT,$vmname,0-2" >> $MAPFILE
 	done
 	
 	## Generate dhcp configfile
 	echo Generate dhcp configfile
-	dhcpcfg="paipai_$HOST.conf"
-	rm -f $dhcpcfg
+	
+	rm -f $DHCPCFG
 
-	echo "## Reserved range for paipai program in $HOST" >> $dhcpcfg
-	echo "" >> $dhcpcfg
+	echo "## Reserved range for paipai program in $HOST" >> $DHCPCFG
+	echo "" >> $DHCPCFG
 	while read line; do
 		mac=`echo $line |cut -d',' -f1`
 		ip=`echo $line |cut -d',' -f2`
 		bdf=`echo $line |cut -d',' -f3`
 		hostname=`echo $line |cut -d',' -f4`
 		
-		echo "host $hostname {" >> $dhcpcfg
-		echo "    hardware ethernet ${mac};" >> $dhcpcfg
-		echo "    fixed-address ${ip};" >> $dhcpcfg
-		echo "}" >> $dhcpcfg
+		echo "host $hostname {" >> $DHCPCFG
+		echo "    hardware ethernet ${mac};" >> $DHCPCFG
+		echo "    fixed-address ${ip};" >> $DHCPCFG
+		echo "}" >> $DHCPCFG
 		
 	done < $MAPFILE
 
-	echo Send dhcpd.conf to remote keysrv and restart remote dhcpd service...
-	dhcpserver=keysrv-20
-	scp $dhcpcfg ${dhcpserver}:/etc/dhcp/paipai/
-	ssh ${dhcpserver} "systemctl restart dhcpd"
-	
+	echo "Send $DHCPCFG to remote keysrv and restart remote dhcpd service..."
+	# DHCP server must be named as keysrv-20, bla, bla"
+	DHCPSERVER="keysrv-${DEFAULT_BR#br}"
+	if [ $DRY_RUN -eq 1 ]; then
+		echo Todo: scp $DHCPCFG ${DHCPSERVER}:/etc/dhcp/paipai/paipai_${HOST}.conf
+		echo Todo: ssh ${DHCPSERVER} "systemctl restart dhcpd"
+	else
+		scp $DHCPCFG ${DHCPSERVER}:/etc/dhcp/paipai/paipai_${HOST}.conf
+		ssh ${DHCPSERVER} "systemctl restart dhcpd"
+	fi	
 fi
 
 
@@ -400,7 +427,9 @@ while read line; do
 # For generic HD, we need to wait 3 mins to initialize VM without experiencing HD I/O flooding.
 # But, that's not true for NVMe.  
 		echo "     Sleep 15 seconds for the initialization of VM $hostname ... "
-		sleep 15
+		if [ $DRY_RUN -ne 1 ]; then
+			sleep 15
+		fi
 
 		echo ""
 		echo "======================================================="
