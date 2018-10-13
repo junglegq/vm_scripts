@@ -53,6 +53,10 @@ declare vmid
 Usage()
 {
         echo "$0 [ -n <number> | -s <VM NAME> ]"
+        echo ""
+        echo "Options: "
+    	echo "    -n <number> : Create <number> VMs. This action will first remove all VMs created before."
+    	echo "    -s <VM NAME> : Destroy this <VM>, delete its image folder, and then re-create this VM."
 }
 
 ######################################################################

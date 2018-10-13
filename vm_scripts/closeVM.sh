@@ -24,7 +24,7 @@ declare vmid
 Usage()
 {
 	echo "$0: Close VMs as required. "
-        echo "Usage: $0 [ -a | -s <VM NAME> ]"
+	echo "Usage: $0 [ -a | -s <VM NAME> ]"
 	echo "     -a: all VMs"
 	echo "     -s <VM NAME>: specific VM to be closed "
 }
