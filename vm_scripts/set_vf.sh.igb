@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+# /oses/vm_scripts/set_vf.sh
+
+# eth0
+# 	BDF: 01:00.0
+ip link set eth0 vf 0 mac 32:8c:71:01:00:00
+ip link set eth0 vf 1 mac 32:8c:71:01:00:01
+ip link set eth0 vf 2 mac 32:8c:71:01:00:02
+ip link set eth0 vf 3 mac 32:8c:71:01:00:03
+ip link set eth0 vf 4 mac 32:8c:71:01:00:04
+ip link set eth0 vf 5 mac 32:8c:71:01:00:05
+ip link set eth0 vf 6 mac 32:8c:71:01:00:06
+
+# eth1
+# 	BDF: 01:00.1
+ip link set eth1 vf 0 mac 32:8c:71:01:01:00
+ip link set eth1 vf 1 mac 32:8c:71:01:01:01
+ip link set eth1 vf 2 mac 32:8c:71:01:01:02
+ip link set eth1 vf 3 mac 32:8c:71:01:01:03
+ip link set eth1 vf 4 mac 32:8c:71:01:01:04
+ip link set eth1 vf 5 mac 32:8c:71:01:01:05
+ip link set eth1 vf 6 mac 32:8c:71:01:01:06
+

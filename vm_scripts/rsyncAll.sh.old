@@ -1,0 +1,36 @@
+#!/bin/bash
+
+rsync=`which rsync`
+rsyncopt="-avz -e ssh"
+
+# Target: box1
+target=192.168.1.13:/oses
+localdir=/oses/win7_tmpl
+${rsync} ${rsyncopt} ${localdir} ${target}
+
+## vm_scripts
+localdir=/oses/vm_scripts
+${rsync} ${rsyncopt} ${localdir} ${target}
+
+# Target: node1
+target=192.168.1.24:/oses
+localdir=/oses/win7_tmpl
+${rsync} ${rsyncopt} ${localdir} ${target}
+
+## vm_scripts
+localdir=/oses/vm_scripts
+
+# Target: node2
+target=192.168.1.25:/oses
+localdir=/oses/win7_tmpl
+${rsync} ${rsyncopt} ${localdir} ${target}
+
+## vm_scripts
+localdir=/oses/vm_scripts
+# Target: node3
+target=192.168.1.26:/oses
+localdir=/oses/win7_tmpl
+${rsync} ${rsyncopt} ${localdir} ${target}
+
+## vm_scripts
+localdir=/oses/vm_scripts

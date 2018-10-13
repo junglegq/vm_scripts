@@ -1,0 +1,112 @@
+#!/bin/bash
+#
+# /oses/vm_scripts/create_required_vms.sh
+
+if [ x$1 = x ]; then 
+	echo "Usage: ./create_required_vns.sh < number of VMs >"
+	echo "       <number> must be less than or equal to ??." 
+	exit 1
+fi
+
+declare -i n
+
+let n=$1
+
+ROOTPATH=/oses
+
+MAPFILE=$ROOTPATH/mapping.csv
+VMDIR=$ROOTPATH/vms
+TMPLDIR=$ROOTPATH/win7_tmpl
+
+RAMDIR=/dev/shm
+
+BTRFS=/sbin/btrfs
+
+echo " ***   Hello, world   *** "
+echo " ***     Start from : `date` "
+echo ""
+echo "======================================================="
+echo ""
+
+# To delete subvolumes in $VMDIR
+for vm in $VMDIR/*; do
+	$BTRFS subvolume delete $vm
+done
+$BTRFS filesystem defrag $ROOTPATH
+
+while read line; do
+#	echo $line
+	if [ $n -ne 0 ]; then
+		echo " *** Creating VM instance: `date` "
+
+		mac=`echo $line |cut -d',' -f1`
+		ip=`echo $line |cut -d',' -f2`
+		bdf=`echo $line |cut -d',' -f3`
+		hostname=`echo $line |cut -d',' -f4`
+
+# Test Only, to Pin CPU to target VM
+		cpupin=`echo $line |cut -d',' -f5`
+
+
+		
+#		cp $TMPLDIR/win7_tmpl.cfg $VMDIR/$hostname.cfg
+		
+#		echo "Current time: `date`"
+#		echo "Now, copy OS image file $TMPLDIR/base.img to target $VMDIR/$hostname.img. Please stay tuned."
+#		cp $TMPLDIR/base.img $VMDIR/$hostname.img
+
+#		echo "Now, copy RAM FW from $TMPLDIR/ramtmpl.img to target $RAMDIR/ram$hostname.img. "
+#		cp $TMPLDIR/ramtmpl.img $RAMDIR/ram$hostname.img
+		
+		echo "Create btrfs snapshot for each vm, and name it as hostname. "
+		CURVM=$VMDIR/$hostname
+		$BTRFS subvolume snapshot $ROOTPATH/win7_tmpl/ $CURVM
+		
+		CURCONF=$CURVM/$hostname.cfg
+		mv $CURVM/*.cfg $CURCONF
+		echo "Modify config file: $CURCONF"
+
+		# Remove special entries
+		sed -i -e "/^name=.*$/d" $CURCONF
+		sed -i -e "/^vcpus=.*$/d" $CURCONF
+		sed -i -e "/^cpus=.*$/d" $CURCONF
+		sed -i -e "/^pci =.*$/d" $CURCONF
+		sed -i -e "/^disk =.*$/d" $CURCONF
+
+		# Append special entries
+		echo "name=\"$hostname\"" >> $CURCONF
+
+# Test Only, to Pin CPU to target VM
+		pinstart=`echo $cpupin |cut -d'-' -f1`
+		pinend=`echo $cpupin |cut -d'-' -f2`
+		cpucores=$(($pinend-$pinstart+1))
+
+		echo "vcpus=$cpucores" >> $CURCONF
+		echo "cpus=\"$cpupin\"" >> $CURCONF
+
+		# dd if=/dev/zero of=$RAMDIR/ram$hostname.img  bs=1M count=500
+
+		# echo "disk = [ 'file:/$CURVM/base.img,xvda,w', 'file:/$RAMDIR/ram$hostname.img,xvdb,w' ]" >> $CURCONF
+		echo "disk = [ 'file:/$CURVM/base.img,xvda,w' ]" >> $CURCONF
+		echo "pci = [ '$bdf' ]" >> $CURCONF
+
+		echo "Now, create VM: $hostname"
+		xl create $CURCONF
+
+# For generic HD, we need to wait 3 mins to initialize VM without experiencing HD I/O flooding.
+# But, that's not true for NVMe.  
+		echo "     Sleep 15 seconds for the initialization of VM $hostname ... "
+		sleep 15
+
+		echo ""
+		echo "======================================================="
+		echo ""
+
+		n=$n-1
+
+	fi
+done < $MAPFILE
+
+
+echo " ***   Bye   *** "
+echo " ***     End by `date` "

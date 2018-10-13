@@ -1,0 +1,124 @@
+#!/bin/bash
+
+
+ROOTPATH=/oses
+
+MAPFILE=$ROOTPATH/mapping.csv
+VMDIR=$ROOTPATH/vms
+TMPLDIR=$ROOTPATH/win7_tmpl
+
+RAMDIR=/dev/shm
+
+BTRFS=/sbin/btrfs
+
+declare all
+declare vmid
+
+Usage()
+{
+	echo "$0: Close VMs as required. "
+        echo "Usage: $0 [ -a | -s <VM NAME> ]"
+	echo "     -a: all VMs"
+	echo "     -s <VM NAME>: specific VM to be closed "
+}
+
+
+PrepareSingle()
+{
+        vm=$1
+
+        #echo "Prepare for single VM: $vm"
+        echo "Destroy VM $vm ..."
+        xl -f destroy $vm 2>/dev/null
+
+#        $BTRFS subvolume delete $VMDIR/$vm/win7_tmpl
+	echo "BTRFS subvolume delete $VMDIR/$vm ..."
+        $BTRFS subvolume delete $VMDIR/$vm
+
+# This is new added feature, in order to revoke access to internet via NAT table in router.
+#
+# We sort out WAN port in router by checking VM's IP. Current rule:
+#       int g0/0: 192.168.1.0/24 (box0, box1, node3)
+#       int g0/1: 10.101.20.0/24 (node1, node2)
+#
+# Command should be formatted as below:
+#       ./mngNAT.sh off g0/1 44444 10.101.22.33 2233 vpn20
+#
+
+	echo "Remove rule in the router for target VM $vm ..."
+
+        NATScript=/oses/vm_scripts/mngNAT.sh
+        LOCALPORT=5900
+        SWITCHON='off'
+
+	ip=`egrep $vm $MAPFILE | cut -d',' -f2`
+
+        if [[ $ip =~ "192.168.1" ]]; then
+                p_intf='g0/0'
+                v_intf=''
+                p_port=${ip##"192.168.1."}
+                p_port='59'$p_port      # Form: 59100
+                l_intf=$ip
+                l_port=$LOCALPORT
+
+                $NATScript $SWITCHON $p_intf $p_port $l_intf $l_port $v_intf
+        elif [[ $ip =~ "10.101.20" ]]; then
+                p_intf='g0/1'
+                v_intf='vpn20'
+                p_port=${ip##"10.101.20."}
+                p_port='20'$p_port      # Form: 20100
+                l_intf=$ip
+                l_port=$LOCALPORT
+
+                $NATScript $SWITCHON $p_intf $p_port $l_intf $l_port $v_intf
+	else 
+		echo "Can't find ip from mapping file $MAPFILE with VM name $vm"
+	fi    
+
+	echo " ... Done "
+}
+
+PrepareAll()
+{
+        echo "Prepare for all VMS ... "
+
+        # To delete subvolumes in $VMDIR
+        for vm in $VMDIR/*; do
+                curvm=`basename $vm`
+                PrepareSingle $curvm
+
+        done
+
+        $BTRFS filesystem defrag $ROOTPATH
+}
+
+# Target: 
+# 1. Destroy VM
+# 2. Delete btrfs subvolume
+
+while getopts "as:" arg  
+do
+        case $arg in
+             a)
+		all="yes"
+        	PrepareAll
+                echo "Close all VMs ..." ;;
+             s)
+                vmid=$OPTARG
+                
+		echo "Close VM: $vmid ..."
+        	PrepareSingle $vmid ;;
+             ?)
+                Usage
+                exit 1 ;;
+         esac
+done
+
+if [[ "x$all" = "x" ]] && [[ "x$vmid" = "x" ]]; then
+        Usage
+        exit 1
+fi
+
+
+
+

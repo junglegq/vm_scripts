@@ -1,0 +1,20 @@
+#!/bin/bash
+
+Usage()
+{
+	echo "Usage: $0 <First VM ID> <Last VM ID> "
+
+}
+
+if [[ $# -ne 2 ]]; then
+	Usage
+	exit 1
+fi
+
+from=$1
+to=$2
+
+for ((i=$from; i<=$to; i++)); do 
+	echo "Destroy VM $i ..."
+	xl destroy $i &
+done

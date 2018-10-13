@@ -1,0 +1,5 @@
+interface GigabitEthernet0/0 
+nat server protocol tcp global current-interface 59100 inside 192.168.1.100 5900
+nat server protocol tcp global current-interface 56660 inside 192.168.1.100 6660
+nat server protocol tcp global current-interface 59101 inside 192.168.1.101 5900
+nat server protocol tcp global current-interface 56661 inside 192.168.1.101 6660
