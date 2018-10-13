@@ -10,7 +10,6 @@ HOST=`hostname`
 
 ROOTPATH=/oses
 SCRIPTSPATH=$ROOTPATH/vm_scripts
-VMDIR=$ROOTPATH/vms
 TMPLDIR=$ROOTPATH/win7_tmpl
 
 RAMDIR=/dev/shm
@@ -297,11 +296,13 @@ if [[ "x$n" = "x" ]] && [[ "x$vmid" = "x" ]]; then
 	exit 2
 fi
 
+VMDIR=$ROOTPATH/vms_BRXX
 MAPFILE=$ROOTPATH/mapping_BRXX.csv
 NATTABLE=$SCRIPTSPATH/nat_BRXX.cfg
 DHCPCFG="$SCRIPTSPATH/paipai_${HOST}_BRXX.conf"
 # Rename global variables here: 
 #   for example, New format as is: mapping_br20.csv
+VMDIR=${VMDIR/BRXX/${DEFAULT_BR}}
 MAPFILE=${MAPFILE/BRXX/${DEFAULT_BR}}
 NATTABLE=${NATTABLE/BRXX/${DEFAULT_BR}}
 DHCPCFG=${DHCPCFG/BRXX/${DEFAULT_BR}}
