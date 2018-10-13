@@ -153,6 +153,7 @@ if [[ "x$all" = "x" ]] && [[ "x$vmid" = "x" ]]; then
         exit 1
 fi
 
-echo "Last, invoke mngNAT.sh to remove NAT entries in the interface of the router. "
-echo ""
-$SCRIPTSPATH/mngNAT.sh $NATTABLE
+echo "For box2, do not execute script --> $SCRIPTSPATH/mngNAT.sh $NATTABLE"
+#echo "Last, invoke mngNAT.sh to remove NAT entries in the interface of the router. "
+#echo ""
+#$SCRIPTSPATH/mngNAT.sh $NATTABLE

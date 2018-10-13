@@ -26,7 +26,7 @@ NATIP1="222.73.69.145"
 
 HOST=`hostname`
 # This is the IP that new VM in each node starts with.
-IPPREFIX="192.168.1."
+IPPREFIX="10.101.20."
 case $HOST in
 	"box0" )
 		IPOFFSET=130
@@ -39,6 +39,9 @@ case $HOST in
 		;;
 	"node2" )
 		IPOFFSET=90
+		;;
+	"box2" )
+		IPOFFSET=190
 		;;
 esac
 
@@ -102,6 +105,8 @@ GenConfig()
 	elif [[ $thisbox = "node1" || $thisbox = "node2" ]]; then
 		#echo "vif = [ 'type=ioemu, mac=$mac, bridge=br20' ]" >> $CURCONF
 		echo "vif = [ 'type=ioemu, mac=$mac, bridge=br0' ]" >> $CURCONF
+	elif [[ $thisbox = "box2" ]]; then
+		echo "vif = [ 'type=ioemu, mac=$mac, bridge=br20' ]" >> $CURCONF
 	fi
 }
 
@@ -235,9 +240,12 @@ PrepareAll()
 }
 
 # Generate prefix of the mac address
-# Format: "00:16:3e:CHASSISxx:NODExx"
-# PS: 
-#     miner VMs takes MAC "00:16:3e:ff:ff:XX"
+# OBSOLETE : Format: "00:16:3e:CHASSISxx:NODExx"
+# Format: 00:16:3e:<Hec of partial IP>:<Hec of partial IP>:<Hec of partial IP>
+# For example, IP: 10.101.20.190
+#     Should be mapped to 00:16:3e:<hec of 101>:<hec of 20>:<hec of 190>, which equals
+#     00:16:3e:65:14:be
+
 PrefixMAC () {
 	_prefixVM="00:16:3e"
 	_prefixChas=""
@@ -259,9 +267,13 @@ PrefixMAC () {
 			_prefixChas="02"
 			_prefixNode="02" 
 			;;
+		"box2" )
+			_prefixChas="65"
+			_prefixNode="14" 
+			;;
 	esac
 
-	return ${_prefixVM}":"${_prefixChas}":"${_prefixNode}
+	echo ${_prefixVM}":"${_prefixChas}":"${_prefixNode}
 
 }
 
@@ -316,42 +328,13 @@ elif [[ "x$n" != "x" ]]; then
 fi
 
 
-# Generate prefix of the mac address
-# Format: "00:16:3e:CHASSISxx:NODExx"
-PrefixMAC () {
-        _prefixVM="00:16:3e"
-        _prefixChas=""
-        _prefixNode=""
-        case $HOST in
-                "box0" )
-                        _prefixChas="00"
-                        _prefixNode="00"
-                        ;;
-                "box1" )
-                        _prefixChas="01"
-                        _prefixNode="00"
-                        ;;
-                "node1" )
-                        _prefixChas="02"
-                        _prefixNode="01"
-                        ;;
-                "node2" )
-                        _prefixChas="02"
-                        _prefixNode="02"
-                        ;;
-        esac
-
-        echo ${_prefixVM}":"${_prefixChas}":"${_prefixNode}
-
-}
-
 if [ "x$n" != "x" ]; then
 	## Generate mapping.csv
 	rm -f $MAPFILE
 
 	for ((i=0;i<$n;i++)); do
 		_prefixmac=$(PrefixMAC)
-		_char=`printf "%02x" $i`
+		_char=`printf "%02x" $((IPOFFSET+i))`
 		newmac=${_prefixmac}":"${_char}	
 		newip=${IPPREFIX}$((IPOFFSET+i))		
 		vmname=${HOST}VF$((IPOFFSET+i))		
@@ -360,6 +343,7 @@ if [ "x$n" != "x" ]; then
 	done
 	
 	## Generate dhcp configfile
+	echo Generate dhcp configfile
 	dhcpcfg="paipai_$HOST.conf"
 	rm -f $dhcpcfg
 
@@ -378,7 +362,8 @@ if [ "x$n" != "x" ]; then
 		
 	done < $MAPFILE
 
-	dhcpserver=keysrv
+	echo Send dhcpd.conf to remote keysrv and restart remote dhcpd service...
+	dhcpserver=keysrv-20
 	scp $dhcpcfg ${dhcpserver}:/etc/dhcp/paipai/
 	ssh ${dhcpserver} "systemctl restart dhcpd"
 	
@@ -422,10 +407,10 @@ while read line; do
 	fi
 done < $MAPFILE
 
-# Last, invoke mngNAT.sh to enable NAT config in router.
-echo "Last, invoke mngNAT.sh to enable NAT config in router"
-echo ""
-$SCRIPTSPATH/mngNAT.sh $NATTABLE
+echo For box2, disable script mngNAT.sh
+# echo "Last, invoke mngNAT.sh to enable NAT config in router"
+# echo ""
+# $SCRIPTSPATH/mngNAT.sh $NATTABLE
 
 echo " ***   Bye   *** "
 echo " ***     End by `date` "
