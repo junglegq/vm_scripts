@@ -142,28 +142,17 @@ do
 			DEFAULT_BR=$OPTARG
 			# Rename global variables here: 
 			#   for example, New format as is: mapping_br20.csv
-			VMDIR=${VMDIR/BRXX/${DEFAULT_BR}}
-			MAPFILE=${MAPFILE/BRXX/${DEFAULT_BR}}
-			NATTABLE=${NATTABLE/BRXX/${DEFAULT_BR}}		
 			echo "Will close VM on bridge: $DEFAULT_BR" ;;
 	    a)
 			all="yes"
 			# Rename global variables here: 
 			#   for example, New format as is: mapping_br20.csv
-			VMDIR=${VMDIR/BRXX/${DEFAULT_BR}}
-			MAPFILE=${MAPFILE/BRXX/${DEFAULT_BR}}
-			NATTABLE=${NATTABLE/BRXX/${DEFAULT_BR}}	
-			echo "Will close all VMs ..." 				
-			PrepareAll ;;
+			echo "Will close all VMs ..." ;;		
 	    s)
 	        vmid=$OPTARG        
 	        # Rename global variables here:  
 			#   for example, New format as is: mapping_br20.csv
-			VMDIR=${VMDIR/BRXX/${DEFAULT_BR}}
-			MAPFILE=${MAPFILE/BRXX/${DEFAULT_BR}}
-			NATTABLE=${NATTABLE/BRXX/${DEFAULT_BR}}	       
-			echo "Close VM: $vmid ..."
-			PrepareSingle $vmid ;;
+			echo "Close VM: $vmid ..." ;;			
 		?)
 			Usage
 			exit 1 ;;
@@ -173,6 +162,17 @@ done
 if [[ "x$all" = "x" ]] && [[ "x$vmid" = "x" ]]; then
 	Usage
 	exit 1
+fi
+
+VMDIR=${VMDIR/BRXX/${DEFAULT_BR}}
+MAPFILE=${MAPFILE/BRXX/${DEFAULT_BR}}
+NATTABLE=${NATTABLE/BRXX/${DEFAULT_BR}}
+
+if [[ $all = "yes"  ]]; then
+	PrepareAll
+fi
+if [[ "x$vmid" != "x" ]]; then
+	PrepareSingle $vmid
 fi
 
 if [ -f $NATTABLE ]; then
