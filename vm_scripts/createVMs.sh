@@ -106,6 +106,8 @@ CreateSingleVM()
 	echo "Create btrfs snapshot for each vm, and name it as hostname. "
 	CURVM=$VMDIR/$hostname
 	if [ $DRY_RUN -ne 1 ]; then
+		# In some circumstances, $CURVM exists. MUST remove it first.
+		rm -rf $CURVM
 		$BTRFS subvolume snapshot $TMPLDIR $CURVM
 	else
 	# Test only, need to remove this directory first before next test.
