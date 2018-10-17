@@ -23,6 +23,7 @@ NATIP1="222.73.69.145"
 MEMSIZE_VM=3500
 
 DEFAULT_BR=br20
+INTERNAL_BR=br255
 
 #####################################################################
 
@@ -82,8 +83,9 @@ GenConfig()
 	# echo "disk = [ 'file:/$CURVM/base.img,xvda,w', 'file:/$RAMDIR/ram$hostname.img,xvdb,w' ]" >> $CURCONF
 	echo "disk = [ 'file:/$CURVM/base.img,xvda,w' ]" >> $CURCONF
 
-	
-	echo "vif = [ 'type=ioemu, mac=$mac, bridge=$DEFAULT_BR' ]" >> $CURCONF
+	# In addition to bridge for production, we need additional internal vif for data transporting.
+	# The internal vif will be connected to bridge br255 with IP segment: 172.31.0.0/16
+	echo "vif = [ 'type=ioemu, mac=$mac, bridge=$DEFAULT_BR', 'type=ioemu, bridge=$INTERNAL_BR' ]" >> $CURCONF
 }
 
 #########################################################
@@ -390,13 +392,13 @@ if [ "x$n" != "x" ]; then
 	done < $MAPFILE
 
 	echo "Send $DHCPCFG to remote keysrv and restart remote dhcpd service..."
-	# DHCP server must be named as keysrv-20, bla, bla"
-	DHCPSERVER="keysrv-${DEFAULT_BR#br}"
+	# Now, all requests from paipai VMs go to single server keysrv-20
+	DHCPSERVER="keysrv-20"
 	if [ $DRY_RUN -eq 1 ]; then
-		echo Todo: scp $DHCPCFG ${DHCPSERVER}:/etc/dhcp/paipai/paipai_${HOST}.conf
+		echo Todo: scp $DHCPCFG ${DHCPSERVER}:/etc/dhcp/paipai/
 		echo Todo: ssh ${DHCPSERVER} "systemctl restart dhcpd"
 	else
-		scp $DHCPCFG ${DHCPSERVER}:/etc/dhcp/paipai/paipai_${HOST}.conf
+		scp $DHCPCFG ${DHCPSERVER}:/etc/dhcp/paipai/
 		ssh ${DHCPSERVER} "systemctl restart dhcpd"
 	fi	
 fi
