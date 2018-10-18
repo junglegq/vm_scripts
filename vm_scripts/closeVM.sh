@@ -1,13 +1,25 @@
 #!/bin/bash
 
 DRY_RUN=1
+if [[ $DRY_RUN -eq 1 ]]; then
+	echo "      !!! WARNING !!! "
+	echo "      !!! WARNING !!! "
+	echo "      !!! WARNING !!! "	
+	echo "    This is dry-run build. "
+fi
 
-ROOTPATH=/oses
+HOST=`hostname`
+if [[ $HOST != "box2" ]]; then
+	echo "This script is only for box2. Exit..."
+	exit 1
+fi
+
+ROOTPATH=/oses/captcha_test_server
 SCRIPTSPATH=$ROOTPATH/vm_scripts
 NATTABLE=$SCRIPTSPATH/nat.cfg
 
-MAPFILE=$ROOTPATH/mapping.csv
-TMPLDIR=$ROOTPATH/win7_tmpl
+MAPFILE=$SCRIPTSPATH/mapping.csv
+TMPLDIR=/oses/captcha_test_server.tmpl
 
 RAMDIR=/dev/shm
 
@@ -132,7 +144,7 @@ PrepareAll()
 
 # Patterns
 VMDIR=$ROOTPATH/vms_BRXX
-MAPFILE=$ROOTPATH/mapping_BRXX.csv
+MAPFILE=$SCRIPTSPATH/mapping_BRXX.csv
 NATTABLE=$SCRIPTSPATH/nat_BRXX.cfg
 
 while getopts "b:as:" arg  

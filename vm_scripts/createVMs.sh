@@ -5,12 +5,23 @@
 # NOTE: current implementation will identify the hostname for the config policy. Be aware. 
 
 DRY_RUN=1
+if [[ $DRY_RUN -eq 1 ]]; then
+	echo "      !!! WARNING !!! "
+	echo "      !!! WARNING !!! "
+	echo "      !!! WARNING !!! "	
+	echo "    This is dry-run build. "
+fi
 
 HOST=`hostname`
 
-ROOTPATH=/oses
+if [[ $HOST != "box2" ]]; then
+	echo "This script is only for box2. Exit..."
+	exit 1
+fi
+
+ROOTPATH=/oses/captcha_test_server
 SCRIPTSPATH=$ROOTPATH/vm_scripts
-TMPLDIR=$ROOTPATH/win7_tmpl
+TMPLDIR=/oses/captcha_test_server.tmpl
 
 RAMDIR=/dev/shm
 BTRFS=/sbin/btrfs
@@ -20,7 +31,7 @@ NATIP0="222.73.69.144"
 NATIP1="222.73.69.145"
 
 # memory size used by VM
-MEMSIZE_VM=3500
+MEMSIZE_VM=4096
 
 DEFAULT_BR=br20
 INTERNAL_BR=br255
@@ -83,9 +94,8 @@ GenConfig()
 	# echo "disk = [ 'file:/$CURVM/base.img,xvda,w', 'file:/$RAMDIR/ram$hostname.img,xvdb,w' ]" >> $CURCONF
 	echo "disk = [ 'file:/$CURVM/base.img,xvda,w' ]" >> $CURCONF
 
-	# In addition to bridge for production, we need additional internal vif for data transporting.
-	# The internal vif will be connected to bridge br255 with IP segment: 172.31.0.0/16
-	echo "vif = [ 'type=ioemu, mac=$mac, bridge=$DEFAULT_BR', 'type=ioemu, bridge=$INTERNAL_BR' ]" >> $CURCONF
+	#  captcha_test_server need one vif connecting to Bridge br20 by default
+	echo "vif = [ 'type=ioemu, mac=$mac, bridge=$DEFAULT_BR' ]" >> $CURCONF
 }
 
 #########################################################
@@ -301,9 +311,9 @@ if [[ "x$n" = "x" ]] && [[ "x$vmid" = "x" ]]; then
 fi
 
 VMDIR=$ROOTPATH/vms_BRXX
-MAPFILE=$ROOTPATH/mapping_BRXX.csv
+MAPFILE=$SCRIPTSPATH/mapping_BRXX.csv
 NATTABLE=$SCRIPTSPATH/nat_BRXX.cfg
-DHCPCFG="$SCRIPTSPATH/paipai_${HOST}_BRXX.conf"
+DHCPCFG="$SCRIPTSPATH/captcha_test_server_${HOST}_BRXX.conf"
 # Rename global variables here: 
 #   for example, New format as is: mapping_br20.csv
 VMDIR=${VMDIR/BRXX/${DEFAULT_BR}}
@@ -330,7 +340,8 @@ case $HOST in
 		IPOFFSET=90
 		;;
 	"box2" )
-		IPOFFSET=190
+		# captcha_test_server: start from IP: 10.101.20.50 
+		IPOFFSET=50
 		;;
 esac
 
@@ -368,7 +379,7 @@ if [ "x$n" != "x" ]; then
 		newmac=${_prefixmac}":"${_char}	
 		newip=${IPPREFIX}.$((IPOFFSET+i))		
 		# e.g. box0VF160BR20
-		vmname=${HOST}VF$((IPOFFSET+i))${DEFAULT_BR}	
+		vmname=CAPTCHA_${HOST}VF$((IPOFFSET+i))${DEFAULT_BR}	
 		# PS: 0-2 now just means to assign 3 CPU threads
 		echo "$newmac,$newip,XENVIRT,$vmname,0-2" >> $MAPFILE
 	done
@@ -378,7 +389,7 @@ if [ "x$n" != "x" ]; then
 	
 	rm -f $DHCPCFG
 
-	echo "## Reserved range for paipai program in $HOST" >> $DHCPCFG
+	echo "## Reserved range for captcha_test_server program in $HOST" >> $DHCPCFG
 	echo "" >> $DHCPCFG
 	while read line; do
 		mac=`echo $line |cut -d',' -f1`
@@ -397,10 +408,10 @@ if [ "x$n" != "x" ]; then
 	# Now, all requests from paipai VMs go to single server keysrv-20
 	DHCPSERVER="keysrv-20"
 	if [ $DRY_RUN -eq 1 ]; then
-		echo Todo: scp $DHCPCFG ${DHCPSERVER}:/etc/dhcp/paipai/
+		echo Todo: scp $DHCPCFG ${DHCPSERVER}:/etc/dhcp/
 		echo Todo: ssh ${DHCPSERVER} "systemctl restart dhcpd"
 	else
-		scp $DHCPCFG ${DHCPSERVER}:/etc/dhcp/paipai/
+		scp $DHCPCFG ${DHCPSERVER}:/etc/dhcp/
 		ssh ${DHCPSERVER} "systemctl restart dhcpd"
 	fi	
 fi
